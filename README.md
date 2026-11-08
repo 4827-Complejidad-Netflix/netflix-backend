@@ -16,7 +16,7 @@ Se consume desde el frontend en Next.js (repositorio aparte).
 ```bash
 python -m venv .venv
 .venv\Scripts\activate            # Windows
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python scripts/download_dataset.py
 copy .env.example .env            # opcional
 uvicorn app.main:app --reload
@@ -61,6 +61,21 @@ tests/
 ```bash
 pytest
 ```
+
+## Despliegue en Render
+
+El repo incluye `render.yaml` (Blueprint):
+
+1. En Render: **New → Blueprint** y selecciona este repositorio.
+2. Cuando lo pida, rellena `CORS_ORIGINS` con la URL del frontend desplegado
+   (p. ej. `https://mi-frontend.vercel.app`; varias separadas por coma).
+3. Render instala dependencias, descarga el dataset en el build y arranca con
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Healthcheck: `/health`.
+
+En el frontend, usa `NEXT_PUBLIC_API_URL=https://<servicio>.onrender.com/api`.
+
+> En el plan gratuito el servicio se duerme tras ~15 min sin tráfico; la primera
+> petición tarda ~1 min mientras arranca y carga el dataset.
 
 ## Frontend (Next.js)
 

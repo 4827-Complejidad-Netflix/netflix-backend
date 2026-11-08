@@ -1,0 +1,18 @@
+# Blueprint de Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: netflix-backend
+    runtime: python
+    plan: free
+    # El dataset no está en el repo: se descarga durante el build.
+    buildCommand: pip install -r requirements.txt && python scripts/download_dataset.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: MIN_RATING
+        value: "4.0"
+      # URL del frontend desplegado (separadas por coma). Se pide al crear el servicio.
+      - key: CORS_ORIGINS
+        sync: false

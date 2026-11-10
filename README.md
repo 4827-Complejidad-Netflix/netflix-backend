@@ -36,6 +36,7 @@ Docs interactivas: http://localhost:8000/docs
 | GET | `/api/users/{id}` | Películas que le gustaron al usuario |
 | GET | `/api/users/{id}/recommendations?limit=` | Recomendaciones vía BFS |
 | GET | `/api/users/{id}/bfs?depth=3&branching=2` | Árbol BFS (`nodes`/`edges`) para visualizar |
+| POST | `/api/recommendations` | BFS desde un perfil anónimo. Body `{ "liked": [ids], "limit": 50 }`; devuelve usuarios del nivel 2, nº total de candidatas y cada candidata con su score y los likes desde los que se llegó (`via`) |
 | GET | `/api/graph/stats` | Métricas de G_B (nodos, aristas, densidad, grado) |
 | GET | `/api/graph/communities?theta=0.10&sample_size=25&seed=` | Proyección G_U + comunidades UFDS |
 | GET | `/api/graph/communities/kruskal?k=3&sample_size=25&seed=` | Kruskal voraz: k comunidades + bosque de expansión máxima |

@@ -1,4 +1,4 @@
-from app.graph.bfs import bfs_levels, bfs_tree, recommend
+from app.graph.bfs import bfs_levels, bfs_tree, recommend, recommend_from_movies
 from app.graph.bipartite import BipartiteGraph
 from app.graph.kruskal import kruskal
 from app.graph.projection import build_projection, detect_communities, jaccard
@@ -26,6 +26,23 @@ def test_recommend_excludes_seen_movies():
     assert 1 not in recs and 2 not in recs
     assert recs[3] == 2  # u2 y u3 la calificaron
     assert recs[4] == 1
+
+
+def test_recommend_from_movies_explains_candidates():
+    # Likes en m1: llegan u1 y u2 (nivel 2) y sus películas no vistas son m2 y m3 (nivel 3).
+    result = recommend_from_movies(make_graph(), {1})
+    assert result.similar_users == 2
+    assert [(c.movie_id, c.score) for c in result.candidates] == [(2, 1), (3, 1)]
+    assert all(c.via == {1: 1} for c in result.candidates)
+
+
+def test_recommend_from_movies_counts_users_per_like():
+    # Likes en m2 y m3: u3 tiene ambas y es el único que valoró m4.
+    result = recommend_from_movies(make_graph(), {2, 3})
+    by_movie = {c.movie_id: c for c in result.candidates}
+    assert by_movie[4].score == 1
+    assert by_movie[4].via == {2: 1, 3: 1}
+    assert by_movie[1].score == 2  # u1 (vía m2) y u2 (vía m3)
 
 
 def test_bfs_tree_branching():

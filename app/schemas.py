@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MovieOut(BaseModel):
@@ -83,3 +83,27 @@ class GraphStats(BaseModel):
     avg_degree: float
     total_ratings: int
     min_rating: float
+
+
+class LikesIn(BaseModel):
+    liked: list[int] = Field(min_length=1, max_length=200)  # ids de películas con "me gusta"
+    limit: int = Field(50, ge=1, le=200)
+
+
+class CandidateVia(BaseModel):
+    movie: MovieOut  # película con "me gusta" desde la que se llegó a la candidata
+    users: int  # usuarios similares que valoraron positivamente ambas
+
+
+class Candidate(BaseModel):
+    movie: MovieOut
+    score: int  # nº de usuarios similares (distancia 2 en G_B) que la calificaron positivamente
+    via: list[CandidateVia]  # de qué likes viene, más usuarios primero (máx. 3)
+
+
+class LikesRecommendations(BaseModel):
+    liked: list[MovieOut]  # likes reconocidos (los ids desconocidos se ignoran)
+    ignored: list[int]  # ids que no existen en el catálogo
+    similar_users: int  # usuarios alcanzados en el nivel 2 del BFS
+    total_candidates: int  # películas alcanzadas en el nivel 3 (antes de aplicar limit)
+    candidates: list[Candidate]

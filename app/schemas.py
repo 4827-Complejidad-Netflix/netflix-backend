@@ -52,9 +52,31 @@ class GraphOut(BaseModel):
     edges: list[GraphEdge]
 
 
+class SharedMovieOut(BaseModel):
+    movie: MovieOut
+    users: list[int]  # miembros de la comunidad que la valoraron positivamente
+
+
+class GenreShareOut(BaseModel):
+    genre: str
+    share: float  # fracción de las valoraciones positivas de la comunidad con este género
+    lift: float  # share en la comunidad / share en la muestra (> 1: más que el promedio)
+
+
 class Community(BaseModel):
     id: int
     users: list[int]
+    # Por qué se formó: similitud interna y lo que sus miembros tienen en común.
+    avg_similarity: float = 0.0  # Jaccard medio de las aristas de G_U dentro de la comunidad
+    internal_edges: int = 0
+    shared_movies: list[SharedMovieOut] = []
+    genres: list[GenreShareOut] = []
+
+
+class IsolatedUser(BaseModel):
+    user: int
+    best_match: int | None  # usuario de la muestra con mayor Jaccard (None si no comparte ninguna película)
+    similarity: float  # ese Jaccard: quedó aislado porque no alcanza el umbral
 
 
 class CommunitiesOut(BaseModel):
@@ -62,6 +84,7 @@ class CommunitiesOut(BaseModel):
     sample: list[int]
     communities: list[Community]
     isolated: list[int]
+    isolated_details: list[IsolatedUser] = []
     graph: GraphOut
 
 
@@ -71,7 +94,19 @@ class KruskalOut(BaseModel):
     sample: list[int]
     communities: list[Community]
     isolated: list[int]
+    isolated_details: list[IsolatedUser] = []
     graph: GraphOut  # solo las aristas del bosque de expansión máxima
+
+
+class SharedOut(BaseModel):
+    """Películas en común entre dos usuarios: el motivo de su arista en G_U."""
+
+    u: int
+    v: int
+    similarity: float  # Jaccard = |común| / |unión|
+    shared_count: int
+    union_count: int
+    movies: list[MovieOut]  # las más populares primero
 
 
 class GraphStats(BaseModel):

@@ -2,12 +2,23 @@ import random
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import get_store
+from app.api.deps import ensure_user, get_store, movie_out
 from app.core.config import get_settings
 from app.data.store import DataStore
+from app.graph.explain import average_similarity, best_matches, genre_profile, shared_movies
 from app.graph.kruskal import kruskal
-from app.graph.projection import build_projection, detect_communities
-from app.schemas import CommunitiesOut, Community, GraphOut, GraphStats, KruskalOut
+from app.graph.projection import build_projection, detect_communities, jaccard
+from app.schemas import (
+    CommunitiesOut,
+    Community,
+    GenreShareOut,
+    GraphOut,
+    GraphStats,
+    IsolatedUser,
+    KruskalOut,
+    SharedMovieOut,
+    SharedOut,
+)
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -44,10 +55,39 @@ def sample_users(store: DataStore, params: SampleParams) -> list[int]:
     return sorted(rng.sample(eligible, min(params.sample_size, len(eligible))))
 
 
-def build_communities_response(sample, groups, edges) -> dict:
-    communities_ = [Community(id=i, users=sorted(g)) for i, g in enumerate(x for x in groups if len(x) > 1)]
+def explain_community(store: DataStore, cid: int, members: list[int], sample: list[int], edges) -> Community:
+    """Comunidad con lo que explica su formación: similitud interna, películas y géneros compartidos."""
+    genres_of = {m.id: m.genres for m in store.movies.values()}
+    avg, internal = average_similarity(members, edges)
+    return Community(
+        id=cid,
+        users=members,
+        avg_similarity=avg,
+        internal_edges=internal,
+        shared_movies=[
+            SharedMovieOut(movie=movie_out(store, s.movie_id), users=s.users)
+            for s in shared_movies(store.graph, members)
+        ],
+        genres=[GenreShareOut(**g.__dict__) for g in genre_profile(store.graph, members, sample, genres_of)],
+    )
+
+
+def build_communities_response(store: DataStore, sample, groups, edges, all_pairs) -> dict:
+    """`edges` son las aristas que se dibujan; `all_pairs`, todos los pares de la muestra con su Jaccard."""
+    members = [sorted(g) for g in groups if len(g) > 1]
+    communities_ = [explain_community(store, i, users, sample, edges) for i, users in enumerate(members)]
     isolated = sorted(g[0] for g in groups if len(g) == 1)
     community_of = {u: c.id for c in communities_ for u in c.users}
+
+    matches = best_matches(isolated, all_pairs)
+    isolated_details = [
+        IsolatedUser(
+            user=u,
+            best_match=matches[u][0] if u in matches and matches[u][1] > 0 else None,
+            similarity=round(matches[u][1], 4) if u in matches else 0.0,
+        )
+        for u in isolated
+    ]
 
     graph = GraphOut(
         nodes=[
@@ -56,7 +96,13 @@ def build_communities_response(sample, groups, edges) -> dict:
         ],
         edges=[{"source": f"user-{u}", "target": f"user-{v}", "weight": round(j, 4)} for u, v, j in edges],
     )
-    return {"sample": sample, "communities": communities_, "isolated": isolated, "graph": graph}
+    return {
+        "sample": sample,
+        "communities": communities_,
+        "isolated": isolated,
+        "isolated_details": isolated_details,
+        "graph": graph,
+    }
 
 
 @router.get("/communities", response_model=CommunitiesOut)
@@ -67,9 +113,12 @@ def communities(
 ):
     """Proyección G_U (fuerza bruta) + comunidades con UFDS sobre una muestra de usuarios."""
     sample = sample_users(store, params)
-    edges = build_projection(store.graph, sample, theta)
+    # Se comparan todos los pares una vez (θ = 0) y luego se filtra: así también se sabe
+    # qué tan cerca quedó cada usuario aislado del umbral, sin repetir la fuerza bruta.
+    all_pairs = build_projection(store.graph, sample, theta=0.0)
+    edges = [e for e in all_pairs if e[2] >= theta]
     groups = detect_communities(sample, edges)
-    return CommunitiesOut(theta=theta, **build_communities_response(sample, groups, edges))
+    return CommunitiesOut(theta=theta, **build_communities_response(store, sample, groups, edges, all_pairs))
 
 
 @router.get("/communities/kruskal", response_model=KruskalOut)
@@ -89,5 +138,27 @@ def kruskal_communities(
     return KruskalOut(
         k=k,
         total_similarity=round(sum(w for _, _, w in chosen), 4),
-        **build_communities_response(sample, groups, chosen),
+        **build_communities_response(store, sample, groups, chosen, edges),
+    )
+
+
+@router.get("/shared", response_model=SharedOut)
+def shared(
+    u: int = Query(..., description="Primer usuario"),
+    v: int = Query(..., description="Segundo usuario"),
+    limit: int = Query(12, ge=1, le=100),
+    store: DataStore = Depends(get_store),
+):
+    """Películas que ambos valoraron positivamente: la intersección que da su Jaccard en G_U."""
+    ensure_user(store, u)
+    ensure_user(store, v)
+    a, b = set(store.graph.movies_of(u)), set(store.graph.movies_of(v))
+    common = sorted(a & b, key=lambda m: (-len(store.graph.users_of(m)), m))
+    return SharedOut(
+        u=u,
+        v=v,
+        similarity=round(jaccard(a, b), 4),
+        shared_count=len(a & b),
+        union_count=len(a | b),
+        movies=[movie_out(store, m) for m in common[:limit]],
     )

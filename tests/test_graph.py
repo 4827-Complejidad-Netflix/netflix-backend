@@ -108,3 +108,35 @@ def test_user_community_and_recommendations():
     _, community = user_community(g, 1, theta=0.9, pool_size=5)
     assert community == [1]
     assert recommend_from_community(g, 1, community) == []
+
+
+def test_shared_movies_counts_members():
+    from app.graph.explain import shared_movies
+
+    # m1: u1, u2 · m2: u1, u3 · m3: u2, u3 · m4 y m5 solo tienen un usuario.
+    result = shared_movies(make_graph(), [1, 2, 3])
+    assert [(s.movie_id, s.users) for s in result] == [(1, [1, 2]), (2, [1, 3]), (3, [2, 3])]
+
+
+def test_genre_profile_lift_against_sample():
+    from app.graph.explain import genre_profile
+
+    genres = {1: ["Drama"], 2: ["Drama"], 3: ["Comedy"], 4: ["Comedy"], 5: ["Horror"]}
+    profile = genre_profile(make_graph(), [1], [1, 2, 3, 4], genres)
+    # u1 solo valoró dramas; en la muestra, 4 de 8 valoraciones son Drama (lift = 1 / 0,5).
+    assert profile[0].genre == "Drama" and profile[0].share == 1.0
+    assert profile[0].lift == 2.0
+
+
+def test_average_similarity_only_counts_internal_edges():
+    from app.graph.explain import average_similarity
+
+    edges = [(1, 2, 0.2), (2, 3, 0.4), (3, 4, 0.9)]
+    assert average_similarity([1, 2, 3], edges) == (0.3, 2)
+
+
+def test_best_matches_explain_isolated_users():
+    from app.graph.explain import best_matches
+
+    pairs = [(1, 2, 0.05), (1, 3, 0.08), (2, 3, 0.5)]
+    assert best_matches([1], pairs) == {1: (3, 0.08)}

@@ -1,7 +1,14 @@
 from app.graph.bfs import bfs_levels, bfs_tree, recommend, recommend_from_movies
 from app.graph.bipartite import BipartiteGraph
 from app.graph.kruskal import kruskal
-from app.graph.projection import build_projection, detect_communities, jaccard
+from app.graph.projection import (
+    build_projection,
+    community_pool,
+    detect_communities,
+    jaccard,
+    recommend_from_community,
+    user_community,
+)
 from app.graph.ufds import UnionFind
 
 
@@ -84,6 +91,23 @@ def test_communities():
     groups = detect_communities([1, 2, 3, 4], edges)
     assert sorted(groups[0]) == [1, 2, 3]
     assert groups[1] == [4]
+
+
+def test_community_pool_ranks_by_shared_movies():
+    # u1 comparte m1 con u2 y m2 con u3; u4 no comparte nada.
+    assert community_pool(make_graph(), 1, 5) == [1, 2, 3]
+    assert len(community_pool(make_graph(), 1, 1)) == 2
+
+
+def test_user_community_and_recommendations():
+    g = make_graph()
+    # J(u1,u2) = 1/3, J(u1,u3) = 1/4, J(u2,u3) = 1/4: con theta 0.3 solo se une u2.
+    _, community = user_community(g, 1, theta=0.3, pool_size=5)
+    assert community == [1, 2]
+    assert recommend_from_community(g, 1, community) == [(3, 1)]
+    _, community = user_community(g, 1, theta=0.9, pool_size=5)
+    assert community == [1]
+    assert recommend_from_community(g, 1, community) == []
 
 
 def test_shared_movies_counts_members():

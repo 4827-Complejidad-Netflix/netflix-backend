@@ -32,6 +32,13 @@ class Recommendation(BaseModel):
     score: int  # nº de usuarios similares (distancia 2 en G_B) que la calificaron positivamente
 
 
+class CommunityRecommendations(BaseModel):
+    theta: float
+    pool: list[int]  # usuario + vecinos del BFS sobre los que se proyecta G_U
+    community: list[int]  # comunidad UFDS del usuario (lo incluye)
+    recommendations: list[Recommendation]  # score = nº de miembros de la comunidad que la valoraron
+
+
 class GraphNode(BaseModel):
     id: str
     kind: str
